@@ -194,6 +194,54 @@
     .pdf-frame-wrap iframe,.pdf-placeholder{height:100%;}
     .sidebar{border-top:1px solid var(--border);}
   }
+
+  /* ── PDF viewer: tabs, overlays, open-in-drive pane ── */
+  .pdf-viewer-wrap{width:100%;max-width:680px;display:flex;flex-direction:column;}
+  .pdf-tab-bar{
+    background:var(--white);border:1px solid var(--border);
+    border-radius:8px 8px 0 0;border-bottom:none;
+    padding:8px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  }
+  .pdf-tab-btn{
+    padding:7px 16px;border-radius:6px;font-family:'Lato',sans-serif;
+    font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.04em;transition:all 0.15s;
+  }
+  .pdf-tab-active{background:var(--ink);color:var(--gold-light);border:none;}
+  .pdf-tab-inactive{background:var(--white);color:var(--ink-mid);border:1px solid var(--border);}
+  .pdf-content-pane{
+    border:1px solid var(--border);border-top:none;
+    border-radius:0 0 8px 8px;overflow:hidden;background:var(--white);position:relative;
+  }
+  .pdf-loading-overlay{
+    position:absolute;inset:0;background:var(--white);z-index:5;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  }
+  .pdf-loading-bar{width:180px;height:3px;background:var(--bg2);border-radius:2px;overflow:hidden;}
+  .pdf-loading-bar-fill{height:100%;background:var(--gold);border-radius:2px;animation:loadfill 2.5s ease forwards;}
+  .pdf-err-overlay{
+    display:none;position:absolute;inset:0;background:var(--white);z-index:4;
+    flex-direction:column;align-items:center;justify-content:center;gap:20px;
+    padding:40px;text-align:center;
+  }
+  .pdf-open-pane{
+    border:1px solid var(--border);border-top:none;
+    border-radius:0 0 8px 8px;overflow:hidden;display:none;
+  }
+  .pdf-open-inner{
+    background:var(--white);height:720px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:24px;padding:40px;text-align:center;
+  }
+  .open-pdf-btn{
+    background:var(--ink);color:var(--gold-light);
+    padding:15px 36px;border-radius:8px;text-decoration:none;
+    font-size:14px;font-weight:700;letter-spacing:0.04em;
+    display:inline-flex;align-items:center;gap:10px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.25);transition:all 0.2s;
+  }
+  .open-pdf-btn:hover{background:#2a2825;transform:translateY(-2px);}
+  @media(max-width:768px){
+    .pdf-open-inner{height:auto;min-height:400px;padding:28px 20px;}
+  }
 </style>
 </head>
 <body>
@@ -503,113 +551,199 @@ function hideLoader() {
   }, 1600);
 }
 
-// ── PDF LOADER — Google Drive workaround ─────────────────────
-function loadPdfWithFallback(embedUrl, viewUrl) {
+// ── PDF LOADER — multi-strategy with auto-fallback ───────────
+//
+// Strategy order:
+//   1. iframe ← uc?export=view   (inline Content-Disposition, no X-Frame-Options
+//                                  on googleusercontent.com; works for most browsers)
+//   2. iframe ← Google Docs Viewer (fallback if export=view hangs or returns HTML)
+//   3. "Open in Drive" tab        (guaranteed fallback — always accessible)
+//
+// Key fixes vs. old code:
+//   • export=download blocked in Chrome 80+ (triggers download, iframe goes blank)
+//   • Old Docs Viewer URL had un-encoded '?' (%3F missing) — parsed incorrectly
+//   • showError() had a duplicate nested declaration (syntax error)
+// ──────────────────────────────────────────────────────────────
+function loadPdfWithFallback(pdfUrl, viewUrl) {
   const wrap   = document.getElementById('pdfFrameWrap');
-  // Extract the file ID from the Drive URL
-  const match  = embedUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)\//);
+  const match  = pdfUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)\//);
   const fileId = match ? match[1] : null;
 
-  if (!fileId) { showPdfFallback(viewUrl, wrap); return; }
+  if (!fileId) { showStaticFallback(viewUrl, wrap); return; }
 
-  // Use Google Docs Viewer — works cross-origin without iframe block
-  // Wraps the Drive URL so GitHub Pages can embed it
-  const googleDocsViewer = `https://docs.google.com/viewer?embedded=true&url=https://drive.google.com/uc?export=download%26id=${fileId}`;
-  const directExport     = `https://drive.google.com/uc?export=download&id=${fileId}`;
+  // Build URL variants
+  const exportViewUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+  // Properly encode the full inner URL so Docs Viewer parses it correctly
+  const docsViewerUrl = `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(exportViewUrl)}`;
+  const driveViewUrl  = `https://drive.google.com/file/d/${fileId}/view`;
 
   wrap.innerHTML = `
-    <div style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:12px;">
+    <div class="pdf-viewer-wrap">
 
-      <!-- Tab switcher -->
-      <div style="display:flex;gap:8px;background:white;padding:10px 16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-        <button onclick="switchView('viewer','${fileId}','${viewUrl}')"
-          id="tabViewer"
-          style="flex:1;padding:8px;border-radius:6px;border:none;background:#0f0e0c;color:#e0b84a;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.04em;">
-          👁 Preview
-        </button>
-        <button onclick="switchView('open','${fileId}','${viewUrl}')"
-          id="tabOpen"
-          style="flex:1;padding:8px;border-radius:6px;border:1px solid #ddd8cf;background:white;color:#6b6560;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.04em;">
-          📂 Open in Drive
-        </button>
+      <!-- Tab bar -->
+      <div class="pdf-tab-bar">
+        <button id="tabPreview" class="pdf-tab-btn pdf-tab-active"
+          onclick="switchPdfTab('preview')">👁 Preview</button>
+        <button id="tabOpen" class="pdf-tab-btn pdf-tab-inactive"
+          onclick="switchPdfTab('open')">📂 Open in Drive</button>
+        <div style="flex:1;text-align:right;">
+          <span id="pdfStatusMsg" style="font-size:11px;color:var(--ink-soft);"></span>
+        </div>
       </div>
 
-      <!-- Viewer iframe (Google Docs Viewer) -->
-      <div id="viewerPane">
-        <iframe
-          id="pdfIframe"
-          src="${googleDocsViewer}"
-          style="width:100%;height:720px;border:none;box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:8px;background:white;"
+      <!-- Preview pane -->
+      <div id="previewPane" class="pdf-content-pane">
+
+        <!-- Loading spinner (shown until iframe fires load) -->
+        <div id="pdfLoadOverlay" class="pdf-loading-overlay">
+          <div style="font-size:48px;">📄</div>
+          <p style="font-size:14px;color:var(--ink-mid);font-family:'Lato',sans-serif;">Loading invoice PDF…</p>
+          <div class="pdf-loading-bar"><div class="pdf-loading-bar-fill"></div></div>
+          <p style="font-size:11px;color:var(--ink-soft);">
+            If this takes too long, use the <strong>Open in Drive</strong> tab above.
+          </p>
+        </div>
+
+        <!-- Error state (shown if all auto-strategies fail) -->
+        <div id="pdfErrOverlay" class="pdf-err-overlay">
+          <div style="font-size:48px;">📄</div>
+          <p style="font-size:13px;color:var(--ink-mid);max-width:300px;line-height:1.7;">
+            Inline preview isn't available in this browser.<br>
+            Use the <strong>Open in Drive</strong> tab to review the PDF,
+            then return here to approve.
+          </p>
+          <a href="${driveViewUrl}" target="_blank" class="open-pdf-btn" style="font-size:13px;padding:12px 28px;">
+            Open Invoice PDF ↗
+          </a>
+        </div>
+
+        <!-- The iframe — primary viewer -->
+        <iframe id="pdfIframe"
+          src="${exportViewUrl}"
+          style="width:100%;height:720px;border:none;display:block;"
           title="Invoice PDF">
         </iframe>
-        <p style="text-align:center;font-size:11px;color:#a8a29b;margin-top:8px;">
-          If preview is blank, click "Open in Drive" tab above to view the PDF
-        </p>
       </div>
 
-      <!-- Open-in-Drive pane (hidden by default) -->
-      <div id="openPane" style="display:none;">
-        <div style="
-          width:100%;height:720px;background:white;
-          box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:8px;
-          display:flex;flex-direction:column;align-items:center;justify-content:center;
-          gap:20px;padding:40px;text-align:center;">
-          <div style="font-size:64px;">📄</div>
+      <!-- Open-in-Drive pane (always available as guaranteed fallback) -->
+      <div id="openPane" class="pdf-open-pane">
+        <div class="pdf-open-inner">
+          <div style="font-size:72px;">📄</div>
           <div>
-            <div style="font-family:'Playfair Display',serif;font-size:22px;color:#0f0e0c;margin-bottom:10px;">
-              Open Invoice PDF
+            <div style="font-family:'Playfair Display',serif;font-size:22px;color:var(--ink);margin-bottom:12px;">
+              View Invoice PDF
             </div>
-            <p style="font-size:13px;color:#6b6560;line-height:1.8;max-width:360px;">
-              Click below to open the full invoice in Google Drive.
-              Review it, then come back to this page to submit your decision.
+            <p style="font-size:14px;color:var(--ink-mid);line-height:1.8;max-width:340px;">
+              Opens in Google Drive — no sign-in required.<br>
+              <strong>Return to this tab</strong> after reviewing to submit your decision.
             </p>
           </div>
-          <a href="${viewUrl}" target="_blank" style="
-            background:#0f0e0c;color:#e0b84a;padding:15px 36px;border-radius:8px;
-            text-decoration:none;font-size:14px;font-weight:700;letter-spacing:0.04em;
-            display:inline-flex;align-items:center;gap:10px;
-            box-shadow:0 4px 20px rgba(0,0,0,0.25);">
-            📂 Open Invoice in Google Drive
+          <a href="${driveViewUrl}" target="_blank" class="open-pdf-btn">
+            📂 Open Invoice in Google Drive ↗
           </a>
-          <a href="${directExport}" target="_blank" style="
-            font-size:12px;color:#b89a5a;text-decoration:underline;cursor:pointer;">
-            ⬇ Download PDF instead
-          </a>
-          <p style="font-size:11px;color:#a8a29b;">After reviewing, return here to Approve or Reject</p>
+          <p style="font-size:11px;color:var(--ink-soft);">Opens in a new tab · No Google account required</p>
         </div>
       </div>
 
     </div>`;
+
+  // ── Wire up iframe events ──────────────────────────────────
+  const iframe = document.getElementById('pdfIframe');
+  let fallbackTimer;
+
+  function hideOverlay() {
+    const o = document.getElementById('pdfLoadOverlay');
+    if (o) o.style.display = 'none';
+  }
+  function showErrOverlay() {
+    hideOverlay();
+    const e = document.getElementById('pdfErrOverlay');
+    if (e) e.style.display = 'flex';
+  }
+  function setStatus(msg) {
+    const el = document.getElementById('pdfStatusMsg');
+    if (el) el.textContent = msg;
+  }
+  function switchToDocsViewer() {
+    setStatus('Trying Google Docs Viewer…');
+    iframe.src = docsViewerUrl;
+    // Docs Viewer: give it 14 s; if still loading → hide overlay and hint
+    fallbackTimer = setTimeout(() => {
+      hideOverlay();
+      setStatus('Preview may be blank — use the "Open in Drive" tab ↑');
+    }, 14000);
+  }
+
+  // load fires for PDF content AND for redirect/HTML pages.
+  // Cross-origin content (PDF from googleusercontent.com) throws on contentDocument
+  // access → that's the success path. If we can read contentDocument, we got
+  // an HTML page (e.g. virus-scan warning for large files) → switch to Docs Viewer.
+  iframe.addEventListener('load', function() {
+    clearTimeout(fallbackTimer);
+    try {
+      // Will throw for cross-origin PDF — that's success
+      void (iframe.contentDocument || iframe.contentWindow.document).title;
+      // If we reach here: same-origin HTML page loaded (e.g. redirect or warning)
+      switchToDocsViewer();
+    } catch(e) {
+      // Cross-origin → PDF rendered by browser's native viewer ✓
+      hideOverlay();
+      setStatus('');
+    }
+  });
+
+  iframe.addEventListener('error', function() {
+    clearTimeout(fallbackTimer);
+    switchToDocsViewer();
+  });
+
+  // If uc?export=view hasn't fired load within 15 s → try Docs Viewer
+  fallbackTimer = setTimeout(function() {
+    const overlay = document.getElementById('pdfLoadOverlay');
+    if (overlay && overlay.style.display !== 'none') {
+      switchToDocsViewer();
+    }
+  }, 15000);
 }
 
-function switchView(tab, fileId, viewUrl) {
-  const viewerPane = document.getElementById('viewerPane');
-  const openPane   = document.getElementById('openPane');
-  const tabViewer  = document.getElementById('tabViewer');
-  const tabOpen    = document.getElementById('tabOpen');
-
-  if (tab === 'viewer') {
-    viewerPane.style.display = 'block';
-    openPane.style.display   = 'none';
-    tabViewer.style.background = '#0f0e0c';
-    tabViewer.style.color      = '#e0b84a';
-    tabViewer.style.border     = 'none';
-    tabOpen.style.background   = 'white';
-    tabOpen.style.color        = '#6b6560';
-    tabOpen.style.border       = '1px solid #ddd8cf';
+// ── Tab switcher ──────────────────────────────────────────────
+function switchPdfTab(tab) {
+  const previewPane = document.getElementById('previewPane');
+  const openPane    = document.getElementById('openPane');
+  const tabPreview  = document.getElementById('tabPreview');
+  const tabOpen     = document.getElementById('tabOpen');
+  if (tab === 'preview') {
+    previewPane.style.display = 'block';
+    openPane.style.display    = 'none';
+    tabPreview.className = 'pdf-tab-btn pdf-tab-active';
+    tabOpen.className    = 'pdf-tab-btn pdf-tab-inactive';
   } else {
-    viewerPane.style.display = 'none';
-    openPane.style.display   = 'block';
-    tabOpen.style.background   = '#0f0e0c';
-    tabOpen.style.color        = '#e0b84a';
-    tabOpen.style.border       = 'none';
-    tabViewer.style.background = 'white';
-    tabViewer.style.color      = '#6b6560';
-    tabViewer.style.border     = '1px solid #ddd8cf';
+    previewPane.style.display = 'none';
+    openPane.style.display    = 'block';
+    tabPreview.className = 'pdf-tab-btn pdf-tab-inactive';
+    tabOpen.className    = 'pdf-tab-btn pdf-tab-active';
   }
 }
 
-function showError(msg) {function showError(msg) {
+// ── No-fileId static fallback ─────────────────────────────────
+function showStaticFallback(viewUrl, wrap) {
+  wrap.innerHTML = `
+    <div style="width:100%;max-width:680px;background:white;border-radius:8px;
+      box-shadow:0 12px 60px rgba(0,0,0,0.2);height:720px;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:20px;padding:40px;text-align:center;">
+      <div style="font-size:64px;">📄</div>
+      <p style="font-size:14px;color:#6b6560;line-height:1.8;">
+        Invoice PDF is ready — open it in a new tab to review.
+      </p>
+      <a href="${viewUrl}" target="_blank" class="open-pdf-btn">
+        Open Invoice PDF ↗
+      </a>
+    </div>`;
+}
+
+// ── Error state ───────────────────────────────────────────────
+function showError(msg) {
   document.getElementById('loader').classList.add('hidden');
   document.getElementById('errorMsg').innerHTML = msg;
   document.getElementById('errorState').classList.add('show');
