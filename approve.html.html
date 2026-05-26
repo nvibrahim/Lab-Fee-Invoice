@@ -503,83 +503,113 @@ function hideLoader() {
   }, 1600);
 }
 
-// ── PDF LOADER WITH FALLBACK ─────────────────────────────────
+// ── PDF LOADER — Google Drive workaround ─────────────────────
 function loadPdfWithFallback(embedUrl, viewUrl) {
-  const wrap = document.getElementById('pdfFrameWrap');
+  const wrap   = document.getElementById('pdfFrameWrap');
+  // Extract the file ID from the Drive URL
+  const match  = embedUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)\//);
+  const fileId = match ? match[1] : null;
 
-  // Method 1: Google Drive embed iframe
+  if (!fileId) { showPdfFallback(viewUrl, wrap); return; }
+
+  // Use Google Docs Viewer — works cross-origin without iframe block
+  // Wraps the Drive URL so GitHub Pages can embed it
+  const googleDocsViewer = `https://docs.google.com/viewer?embedded=true&url=https://drive.google.com/uc?export=download%26id=${fileId}`;
+  const directExport     = `https://drive.google.com/uc?export=download&id=${fileId}`;
+
   wrap.innerHTML = `
-    <div style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:0;">
-      <iframe
-        id="pdfIframe"
-        src="${embedUrl}"
-        title="Invoice PDF"
-        style="width:100%;height:780px;border:none;box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:2px;background:white;"
-        allowfullscreen
-        onload="checkIframeLoaded(this, '${viewUrl}')"
-        onerror="showPdfFallback('${viewUrl}')"
-      ></iframe>
-      <div id="pdfFallback" style="display:none;"></div>
-    </div>`;
+    <div style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:12px;">
 
-  // Safety timeout — if iframe doesn't load in 5s, show fallback
-  setTimeout(() => {
-    const fb = document.getElementById('pdfFallback');
-    if (fb && fb.style.display === 'none') {
-      showPdfFallback(viewUrl);
-    }
-  }, 6000);
+      <!-- Tab switcher -->
+      <div style="display:flex;gap:8px;background:white;padding:10px 16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <button onclick="switchView('viewer','${fileId}','${viewUrl}')"
+          id="tabViewer"
+          style="flex:1;padding:8px;border-radius:6px;border:none;background:#0f0e0c;color:#e0b84a;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.04em;">
+          👁 Preview
+        </button>
+        <button onclick="switchView('open','${fileId}','${viewUrl}')"
+          id="tabOpen"
+          style="flex:1;padding:8px;border-radius:6px;border:1px solid #ddd8cf;background:white;color:#6b6560;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.04em;">
+          📂 Open in Drive
+        </button>
+      </div>
+
+      <!-- Viewer iframe (Google Docs Viewer) -->
+      <div id="viewerPane">
+        <iframe
+          id="pdfIframe"
+          src="${googleDocsViewer}"
+          style="width:100%;height:720px;border:none;box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:8px;background:white;"
+          title="Invoice PDF">
+        </iframe>
+        <p style="text-align:center;font-size:11px;color:#a8a29b;margin-top:8px;">
+          If preview is blank, click "Open in Drive" tab above to view the PDF
+        </p>
+      </div>
+
+      <!-- Open-in-Drive pane (hidden by default) -->
+      <div id="openPane" style="display:none;">
+        <div style="
+          width:100%;height:720px;background:white;
+          box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:8px;
+          display:flex;flex-direction:column;align-items:center;justify-content:center;
+          gap:20px;padding:40px;text-align:center;">
+          <div style="font-size:64px;">📄</div>
+          <div>
+            <div style="font-family:'Playfair Display',serif;font-size:22px;color:#0f0e0c;margin-bottom:10px;">
+              Open Invoice PDF
+            </div>
+            <p style="font-size:13px;color:#6b6560;line-height:1.8;max-width:360px;">
+              Click below to open the full invoice in Google Drive.
+              Review it, then come back to this page to submit your decision.
+            </p>
+          </div>
+          <a href="${viewUrl}" target="_blank" style="
+            background:#0f0e0c;color:#e0b84a;padding:15px 36px;border-radius:8px;
+            text-decoration:none;font-size:14px;font-weight:700;letter-spacing:0.04em;
+            display:inline-flex;align-items:center;gap:10px;
+            box-shadow:0 4px 20px rgba(0,0,0,0.25);">
+            📂 Open Invoice in Google Drive
+          </a>
+          <a href="${directExport}" target="_blank" style="
+            font-size:12px;color:#b89a5a;text-decoration:underline;cursor:pointer;">
+            ⬇ Download PDF instead
+          </a>
+          <p style="font-size:11px;color:#a8a29b;">After reviewing, return here to Approve or Reject</p>
+        </div>
+      </div>
+
+    </div>`;
 }
 
-function checkIframeLoaded(iframe, viewUrl) {
-  // Google Drive sometimes loads but shows an error page inside iframe
-  // We can't read iframe content due to CORS, so just verify it rendered
-  try {
-    const h = iframe.contentWindow.document.body.innerHTML;
-    if (h && h.includes('errorMessage')) showPdfFallback(viewUrl);
-  } catch(e) {
-    // Cross-origin — iframe loaded fine from Google's domain, that's expected
+function switchView(tab, fileId, viewUrl) {
+  const viewerPane = document.getElementById('viewerPane');
+  const openPane   = document.getElementById('openPane');
+  const tabViewer  = document.getElementById('tabViewer');
+  const tabOpen    = document.getElementById('tabOpen');
+
+  if (tab === 'viewer') {
+    viewerPane.style.display = 'block';
+    openPane.style.display   = 'none';
+    tabViewer.style.background = '#0f0e0c';
+    tabViewer.style.color      = '#e0b84a';
+    tabViewer.style.border     = 'none';
+    tabOpen.style.background   = 'white';
+    tabOpen.style.color        = '#6b6560';
+    tabOpen.style.border       = '1px solid #ddd8cf';
+  } else {
+    viewerPane.style.display = 'none';
+    openPane.style.display   = 'block';
+    tabOpen.style.background   = '#0f0e0c';
+    tabOpen.style.color        = '#e0b84a';
+    tabOpen.style.border       = 'none';
+    tabViewer.style.background = 'white';
+    tabViewer.style.color      = '#6b6560';
+    tabViewer.style.border     = '1px solid #ddd8cf';
   }
 }
 
-function showPdfFallback(viewUrl) {
-  const iframe = document.getElementById('pdfIframe');
-  const fb     = document.getElementById('pdfFallback');
-  if (!fb || fb.style.display !== 'none') return;
-
-  if (iframe) iframe.style.display = 'none';
-  fb.style.display = 'block';
-  fb.innerHTML = `
-    <div style="
-      width:100%;max-width:680px;height:520px;background:white;
-      box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:2px;
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:20px;padding:40px;text-align:center;
-    ">
-      <div style="font-size:56px;">📄</div>
-      <div>
-        <div style="font-family:'Playfair Display',serif;font-size:20px;color:#0f0e0c;margin-bottom:8px;">
-          Invoice PDF Ready
-        </div>
-        <p style="font-size:13px;color:#6b6560;line-height:1.7;max-width:340px;">
-          Your browser is blocking the embedded preview. 
-          Click the button below to open and review the PDF, 
-          then come back here to submit your decision.
-        </p>
-      </div>
-      <a href="${viewUrl}" target="_blank" style="
-        background:#0f0e0c;color:#e0b84a;padding:14px 32px;border-radius:8px;
-        text-decoration:none;font-size:14px;font-weight:700;letter-spacing:0.04em;
-        display:inline-flex;align-items:center;gap:8px;
-        box-shadow:0 4px 20px rgba(0,0,0,0.2);
-      ">
-        📂 Open Invoice PDF
-      </a>
-      <p style="font-size:11px;color:#a8a29b;">Opens in a new tab · Then return here to approve or reject</p>
-    </div>`;
-}
-
-function showError(msg) {
+function showError(msg) {function showError(msg) {
   document.getElementById('loader').classList.add('hidden');
   document.getElementById('errorMsg').innerHTML = msg;
   document.getElementById('errorState').classList.add('show');
