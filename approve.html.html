@@ -1,490 +1,513 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Invoice Approval</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Invoice Approval — MedLab</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Lato:wght@300;400;500;700&display=swap" rel="stylesheet"/>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --ink:#0f0e0c;
+    --ink-mid:#6b6560;
+    --ink-soft:#a8a29b;
+    --bg:#f5f2ed;
+    --bg2:#eceae5;
+    --white:#ffffff;
+    --gold:#c49a3c;
+    --gold-light:#e0b84a;
+    --gold-pale:#fdf6e3;
+    --green:#1e6b45;
+    --green-bg:#e8f5ee;
+    --red:#8b2020;
+    --red-bg:#fdeaea;
+    --border:#ddd8cf;
+    --shadow:0 8px 40px rgba(15,14,12,0.10);
+    --radius:12px;
+  }
+  html,body{height:100%;font-family:'Lato',sans-serif;background:var(--bg);color:var(--ink);}
 
-  :root {
-    --ink: #1a1814;
-    --ink-mid: #5a5650;
-    --ink-soft: #9a948e;
-    --cream: #f8f5f0;
-    --cream-dark: #ede9e3;
-    --gold: #b89a5a;
-    --gold-light: #d4b87a;
-    --success: #2d6a4f;
-    --success-bg: #d8f3dc;
-    --danger: #a53a3a;
-    --danger-bg: #ffe0e0;
-    --border: #ddd8d0;
-    --shadow: 0 4px 32px rgba(26,24,20,0.08);
+  /* ── LOADER ── */
+  #loader{
+    position:fixed;inset:0;background:var(--ink);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;z-index:999;transition:opacity 0.5s;
   }
+  #loader.hidden{opacity:0;pointer-events:none;}
+  .loader-logo{font-family:'Playfair Display',serif;font-size:28px;color:var(--gold-light);margin-bottom:32px;letter-spacing:0.04em;}
+  .loader-logo span{display:block;font-family:'Lato',sans-serif;font-size:11px;color:#6b6560;font-weight:300;letter-spacing:0.12em;margin-top:4px;text-transform:uppercase;}
+  .loader-bar{width:220px;height:2px;background:#2a2825;border-radius:2px;overflow:hidden;}
+  .loader-bar-fill{height:100%;background:var(--gold);border-radius:2px;animation:loadfill 1.6s ease forwards;}
+  @keyframes loadfill{from{width:0}to{width:100%}}
+  .loader-text{font-size:12px;color:#6b6560;margin-top:16px;letter-spacing:0.06em;}
 
-  body {
-    font-family: 'DM Sans', sans-serif;
-    background: var(--cream);
-    color: var(--ink);
-    min-height: 100vh;
-    padding: 0;
+  /* ── ERROR STATE ── */
+  #errorState{
+    display:none;position:fixed;inset:0;background:var(--bg);
+    align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:32px;
   }
+  #errorState.show{display:flex;}
+  .error-icon{font-size:48px;}
+  .error-title{font-family:'Playfair Display',serif;font-size:24px;color:var(--ink);}
+  .error-msg{font-size:14px;color:var(--ink-mid);max-width:400px;line-height:1.6;}
 
-  /* Top bar */
-  .topbar {
-    background: var(--ink);
-    color: #f8f5f0;
-    padding: 14px 32px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 100;
+  /* ── TOPBAR ── */
+  .topbar{
+    position:sticky;top:0;z-index:100;
+    background:var(--ink);padding:0 32px;height:56px;
+    display:flex;align-items:center;justify-content:space-between;
   }
-  .topbar-brand {
-    font-family: 'DM Serif Display', serif;
-    font-size: 18px;
-    letter-spacing: 0.02em;
-    color: var(--gold-light);
+  .topbar-brand{font-family:'Playfair Display',serif;font-size:17px;color:var(--gold-light);letter-spacing:0.03em;}
+  .topbar-brand span{font-family:'Lato',sans-serif;font-size:10px;color:#6b6560;font-weight:300;letter-spacing:0.1em;display:block;margin-top:1px;}
+  .status-pill{
+    font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+    padding:5px 14px;border-radius:20px;transition:all 0.4s;
   }
-  .topbar-meta {
-    font-size: 12px;
-    color: #a8a39b;
-    letter-spacing: 0.04em;
-  }
-  .status-badge {
-    font-size: 11px;
-    font-weight: 500;
-    padding: 4px 12px;
-    border-radius: 20px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  .status-pending { background: rgba(184,154,90,0.2); color: var(--gold-light); }
-  .status-approved { background: var(--success-bg); color: var(--success); }
-  .status-rejected { background: var(--danger-bg); color: var(--danger); }
+  .pill-pending{background:rgba(196,154,60,0.18);color:var(--gold-light);}
+  .pill-approved{background:var(--green-bg);color:var(--green);}
+  .pill-rejected{background:var(--red-bg);color:var(--red);}
 
-  /* Layout */
-  .layout {
-    display: grid;
-    grid-template-columns: 1fr 360px;
-    gap: 0;
-    min-height: calc(100vh - 52px);
-  }
+  /* ── LAYOUT ── */
+  .layout{display:grid;grid-template-columns:1fr 380px;min-height:calc(100vh - 56px);}
 
-  /* PDF Panel */
-  .pdf-panel {
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
+  /* ── PDF PANEL ── */
+  .pdf-panel{display:flex;flex-direction:column;border-right:1px solid var(--border);}
+  .pdf-toolbar{
+    background:var(--white);border-bottom:1px solid var(--border);
+    padding:10px 24px;display:flex;align-items:center;gap:12px;
   }
-  .pdf-toolbar {
-    background: white;
-    border-bottom: 1px solid var(--border);
-    padding: 12px 24px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
+  .pdf-filename{
+    flex:1;font-size:13px;font-weight:500;color:var(--ink);
+    display:flex;align-items:center;gap:8px;
   }
-  .pdf-title {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ink);
-    flex: 1;
+  .pdf-filename::before{content:'📄';}
+  .tb-btn{
+    font-size:12px;color:var(--ink-mid);background:none;
+    border:1px solid var(--border);border-radius:6px;
+    padding:5px 12px;cursor:pointer;font-family:'Lato',sans-serif;transition:all 0.15s;
   }
-  .pdf-toolbar-btn {
-    font-size: 12px;
-    color: var(--ink-mid);
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 5px 12px;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    transition: all 0.15s;
+  .tb-btn:hover{background:var(--bg);color:var(--ink);}
+  .pdf-frame-wrap{
+    flex:1;background:#ddd9d3;display:flex;align-items:flex-start;
+    justify-content:center;padding:28px 20px;overflow-y:auto;
   }
-  .pdf-toolbar-btn:hover { background: var(--cream); color: var(--ink); }
-
-  .pdf-viewer {
-    flex: 1;
-    background: #e8e4de;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 32px 24px;
-    overflow-y: auto;
-    min-height: 0;
+  .pdf-frame-wrap iframe{
+    width:100%;max-width:680px;height:780px;border:none;
+    box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:2px;background:white;
   }
-
-  /* Simulated PDF document */
-  .pdf-doc {
-    background: white;
-    width: 100%;
-    max-width: 620px;
-    box-shadow: 0 8px 48px rgba(0,0,0,0.15);
-    border-radius: 2px;
-    overflow: hidden;
-    animation: slideUp 0.4s ease;
+  .pdf-placeholder{
+    width:100%;max-width:680px;height:780px;background:white;
+    box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:2px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;color:var(--ink-soft);
   }
-  @keyframes slideUp {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: translateY(0); }
+  .pdf-placeholder-icon{font-size:48px;}
+  .pdf-placeholder p{font-size:14px;}
+
+  /* ── APPROVAL SIDEBAR ── */
+  .sidebar{background:var(--white);overflow-y:auto;display:flex;flex-direction:column;}
+  .sidebar-inner{padding:28px 24px;flex:1;}
+
+  .sidebar-heading{font-family:'Playfair Display',serif;font-size:22px;color:var(--ink);margin-bottom:6px;}
+  .sidebar-sub{font-size:13px;color:var(--ink-mid);line-height:1.6;margin-bottom:24px;}
+
+  /* Info card */
+  .info-card{
+    background:var(--bg);border:1px solid var(--border);
+    border-radius:var(--radius);padding:16px;margin-bottom:20px;
   }
-  .pdf-header {
-    background: var(--ink);
-    color: white;
-    padding: 32px 40px 24px;
+  .info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;}
+  .info-row:not(:last-child){border-bottom:1px solid var(--border);}
+  .info-label{font-size:11px;color:var(--ink-soft);letter-spacing:0.04em;}
+  .info-value{font-size:13px;font-weight:500;color:var(--ink);}
+  .info-value.amount{font-family:'Playfair Display',serif;font-size:20px;color:var(--gold);}
+  .info-value.loading{
+    background:linear-gradient(90deg,var(--bg2) 25%,var(--bg) 50%,var(--bg2) 75%);
+    background-size:200% 100%;animation:shimmer 1.4s infinite;
+    border-radius:4px;color:transparent;min-width:80px;
   }
-  .pdf-header-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 24px;
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  /* Divider */
+  .divider{height:1px;background:var(--border);margin:20px 0;}
+
+  /* Comment box */
+  .field-label{font-size:11px;font-weight:700;letter-spacing:0.06em;color:var(--ink-mid);margin-bottom:6px;display:block;text-transform:uppercase;}
+  textarea{
+    width:100%;border:1px solid var(--border);border-radius:8px;
+    padding:10px 14px;font-family:'Lato',sans-serif;font-size:13px;
+    color:var(--ink);background:var(--bg);resize:none;height:84px;
+    outline:none;transition:border 0.2s,background 0.2s;line-height:1.5;
   }
-  .pdf-logo {
-    font-family: 'DM Serif Display', serif;
-    font-size: 22px;
-    color: var(--gold-light);
+  textarea:focus{border-color:var(--gold);background:var(--white);}
+
+  /* Action buttons */
+  .action-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;}
+  .btn{
+    padding:13px 10px;border-radius:8px;font-family:'Lato',sans-serif;
+    font-size:13px;font-weight:700;cursor:pointer;border:none;
+    transition:all 0.2s;letter-spacing:0.04em;display:flex;align-items:center;justify-content:center;gap:6px;
   }
-  .pdf-logo span { display: block; font-family: 'DM Sans', sans-serif; font-size: 11px; color: #9a948e; font-weight: 300; letter-spacing: 0.08em; margin-top: 2px; }
-  .pdf-inv-label { font-size: 11px; color: #9a948e; text-align: right; letter-spacing: 0.06em; }
-  .pdf-inv-num { font-size: 20px; font-weight: 300; color: var(--gold-light); font-family: 'DM Serif Display', serif; }
-  .pdf-header-meta { display: flex; gap: 32px; }
-  .pdf-meta-item label { font-size: 10px; color: #9a948e; letter-spacing: 0.06em; display: block; margin-bottom: 3px; }
-  .pdf-meta-item span { font-size: 13px; color: #e8e3db; }
+  .btn-approve{background:var(--green);color:white;}
+  .btn-approve:hover{background:#155235;transform:translateY(-2px);box-shadow:0 4px 16px rgba(30,107,69,0.3);}
+  .btn-reject{background:var(--bg);color:var(--red);border:1.5px solid var(--red);}
+  .btn-reject:hover{background:var(--red-bg);transform:translateY(-2px);}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;transform:none !important;box-shadow:none !important;}
 
-  .pdf-body { padding: 32px 40px; }
-  .pdf-section-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
-
-  .bill-row { display: flex; justify-content: space-between; margin-bottom: 20px; }
-  .bill-to label { font-size: 10px; color: var(--ink-soft); letter-spacing: 0.06em; margin-bottom: 4px; display: block; }
-  .bill-to strong { font-size: 14px; font-weight: 500; }
-  .bill-to p { font-size: 12px; color: var(--ink-mid); line-height: 1.6; margin-top: 2px; }
-
-  .pdf-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-  .pdf-table th { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); padding: 8px 0; border-bottom: 1px solid var(--border); text-align: left; }
-  .pdf-table th:last-child { text-align: right; }
-  .pdf-table td { font-size: 13px; padding: 10px 0; border-bottom: 1px solid #f0ece6; color: var(--ink); vertical-align: top; }
-  .pdf-table td:last-child { text-align: right; font-weight: 500; }
-  .pdf-table td small { display: block; font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
-
-  .pdf-totals { margin-left: auto; width: 220px; }
-  .pdf-total-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-mid); padding: 4px 0; }
-  .pdf-total-row.grand { font-size: 15px; font-weight: 500; color: var(--ink); padding-top: 8px; border-top: 1.5px solid var(--ink); margin-top: 4px; }
-
-  .pdf-footer { padding: 20px 40px 32px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-  .pdf-footer p { font-size: 11px; color: var(--ink-soft); }
-  .pdf-stamp {
-    width: 64px; height: 64px; border-radius: 50%;
-    border: 2.5px dashed var(--border);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 9px; color: var(--ink-soft); text-align: center;
-    letter-spacing: 0.04em; line-height: 1.4;
-    transition: all 0.4s;
+  /* Confirmation */
+  .confirmation{
+    margin-top:16px;padding:16px;border-radius:10px;
+    font-size:13px;line-height:1.6;display:none;animation:fadeUp 0.4s ease;
   }
-  .pdf-stamp.approved { border-color: var(--success); color: var(--success); border-style: solid; background: var(--success-bg); }
-  .pdf-stamp.rejected { border-color: var(--danger); color: var(--danger); border-style: solid; background: var(--danger-bg); }
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .confirmation.approved{background:var(--green-bg);color:var(--green);border:1px solid #b2dcc3;}
+  .confirmation.rejected{background:var(--red-bg);color:var(--red);border:1px solid #f5c0c0;}
+  .conf-title{font-weight:700;font-size:14px;margin-bottom:4px;}
 
-  /* Approval sidebar */
-  .approval-panel {
-    background: white;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
+  /* Timeline */
+  .timeline-section{margin-top:24px;}
+  .section-label{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+  .tl-item{display:flex;gap:12px;padding-bottom:16px;position:relative;}
+  .tl-item:not(:last-child)::before{content:'';position:absolute;left:7px;top:16px;width:1px;height:calc(100% - 8px);background:var(--border);}
+  .tl-dot{width:15px;height:15px;border-radius:50%;background:var(--bg2);border:2px solid var(--border);flex-shrink:0;margin-top:2px;transition:all 0.4s;}
+  .tl-dot.done{background:var(--gold);border-color:var(--gold);}
+  .tl-dot.approved{background:var(--green);border-color:var(--green);}
+  .tl-dot.rejected{background:var(--red);border-color:var(--red);}
+  .tl-text strong{display:block;font-size:12px;font-weight:700;color:var(--ink);margin-bottom:2px;}
+  .tl-text span{font-size:11px;color:var(--ink-soft);}
+
+  /* Already decided state */
+  .already-decided{
+    padding:16px;border-radius:10px;font-size:13px;line-height:1.6;margin-top:8px;
   }
-  .approval-inner { padding: 28px 24px; flex: 1; }
-  .approval-heading { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--ink); margin-bottom: 4px; }
-  .approval-sub { font-size: 13px; color: var(--ink-mid); margin-bottom: 24px; line-height: 1.5; }
+  .already-decided.approved{background:var(--green-bg);color:var(--green);border:1px solid #b2dcc3;}
+  .already-decided.rejected{background:var(--red-bg);color:var(--red);border:1px solid #f5c0c0;}
 
-  .info-card { background: var(--cream); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
-  .info-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; }
-  .info-row:not(:last-child) { border-bottom: 1px solid var(--border); }
-  .info-label { font-size: 11px; color: var(--ink-soft); }
-  .info-value { font-size: 13px; font-weight: 500; color: var(--ink); }
-  .info-value.amount { color: var(--gold); font-size: 16px; font-family: 'DM Serif Display', serif; }
-
-  .divider { height: 1px; background: var(--border); margin: 20px 0; }
-
-  .field-label { font-size: 11px; font-weight: 500; letter-spacing: 0.05em; color: var(--ink-mid); margin-bottom: 6px; display: block; }
-  textarea {
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--cream);
-    resize: none;
-    height: 80px;
-    outline: none;
-    transition: border 0.2s;
+  /* Sending spinner */
+  .spinner{
+    width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);
+    border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;display:none;
   }
-  textarea:focus { border-color: var(--gold); background: white; }
+  @keyframes spin{to{transform:rotate(360deg)}}
 
-  .action-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
-  .btn {
-    padding: 12px;
-    border-radius: 8px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    border: none;
-    transition: all 0.2s;
-    letter-spacing: 0.02em;
-  }
-  .btn-approve { background: var(--success); color: white; }
-  .btn-approve:hover { background: #235c41; transform: translateY(-1px); }
-  .btn-reject { background: var(--cream); color: var(--danger); border: 1px solid var(--danger); }
-  .btn-reject:hover { background: var(--danger-bg); transform: translateY(-1px); }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-  .confirmation {
-    margin-top: 16px;
-    padding: 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    line-height: 1.5;
-    display: none;
-    animation: fadeIn 0.3s ease;
-  }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  .confirmation.approved { background: var(--success-bg); color: var(--success); border: 1px solid #b7dfc4; }
-  .confirmation.rejected { background: var(--danger-bg); color: var(--danger); border: 1px solid #f5c0c0; }
-
-  .timeline { margin-top: 24px; }
-  .timeline-item { display: flex; gap: 12px; padding-bottom: 16px; position: relative; }
-  .timeline-item:not(:last-child)::before { content: ''; position: absolute; left: 7px; top: 16px; width: 1px; height: calc(100% - 8px); background: var(--border); }
-  .timeline-dot { width: 15px; height: 15px; border-radius: 50%; background: var(--cream-dark); border: 2px solid var(--border); flex-shrink: 0; margin-top: 2px; }
-  .timeline-dot.done { background: var(--gold); border-color: var(--gold); }
-  .timeline-text { font-size: 12px; color: var(--ink-mid); }
-  .timeline-text strong { display: block; font-size: 12px; font-weight: 500; color: var(--ink); margin-bottom: 1px; }
-
-  @media (max-width: 768px) {
-    .layout { grid-template-columns: 1fr; }
-    .pdf-panel { min-height: 60vh; }
-    .approval-panel { border-top: 1px solid var(--border); }
+  @media(max-width:768px){
+    .layout{grid-template-columns:1fr;grid-template-rows:55vh auto;}
+    .pdf-frame-wrap iframe,.pdf-placeholder{height:100%;}
+    .sidebar{border-top:1px solid var(--border);}
   }
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="topbar-brand">MedLab Portal</div>
-  <div style="display:flex;align-items:center;gap:16px;">
-    <span class="topbar-meta">Sent to: client@example.com</span>
-    <span class="status-badge status-pending" id="topBadge">Pending Review</span>
-  </div>
+<!-- LOADER -->
+<div id="loader">
+  <div class="loader-logo">MedLab<span>Invoice Portal</span></div>
+  <div class="loader-bar"><div class="loader-bar-fill"></div></div>
+  <div class="loader-text">Loading your invoice...</div>
 </div>
 
-<div class="layout">
+<!-- ERROR STATE -->
+<div id="errorState">
+  <div class="error-icon">⚠️</div>
+  <div class="error-title">Invoice Not Found</div>
+  <div class="error-msg" id="errorMsg">This link may be invalid or expired. Please contact the sender for a new approval link.</div>
+</div>
 
-  <!-- PDF Viewer -->
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-brand">MedLab<span>Invoice Approval Portal</span></div>
+  <span class="status-pill pill-pending" id="topBadge">Pending Review</span>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="layout" id="mainLayout" style="display:none;">
+
+  <!-- LEFT: PDF VIEWER -->
   <div class="pdf-panel">
     <div class="pdf-toolbar">
-      <span class="pdf-title">📄 LAB-INV-2024-0892.pdf</span>
-      <button class="pdf-toolbar-btn" onclick="window.print()">Print</button>
-      <button class="pdf-toolbar-btn">⬇ Download</button>
+      <span class="pdf-filename" id="pdfFilename">Loading...</span>
+      <a id="pdfDownloadBtn" href="#" target="_blank" class="tb-btn">⬇ Open PDF</a>
     </div>
-    <div class="pdf-viewer">
-      <div class="pdf-doc">
-        <!-- PDF Header -->
-        <div class="pdf-header">
-          <div class="pdf-header-top">
-            <div class="pdf-logo">MedLab<span>DIAGNOSTICS & ANALYTICS</span></div>
-            <div>
-              <div class="pdf-inv-label">INVOICE</div>
-              <div class="pdf-inv-num">#INV-2024-0892</div>
-            </div>
-          </div>
-          <div class="pdf-header-meta">
-            <div class="pdf-meta-item"><label>Date Issued</label><span>15 May 2024</span></div>
-            <div class="pdf-meta-item"><label>Due Date</label><span>30 May 2024</span></div>
-            <div class="pdf-meta-item"><label>Status</label><span style="color:var(--gold-light)">Awaiting Approval</span></div>
-          </div>
-        </div>
-
-        <!-- PDF Body -->
-        <div class="pdf-body">
-          <div class="bill-row">
-            <div class="bill-to">
-              <label>FROM</label>
-              <strong>MedLab Diagnostics</strong>
-              <p>12 Science Park Road<br>Thiruvananthapuram, Kerala 695003<br>GST: 32ABCDE1234F1Z5</p>
-            </div>
-            <div class="bill-to" style="text-align:right">
-              <label>BILLED TO</label>
-              <strong>Sunrise Clinic</strong>
-              <p>45 Pettah Road<br>Thiruvananthapuram, Kerala 695024<br>GST: 32XYZAB9876G2H7</p>
-            </div>
-          </div>
-
-          <p class="pdf-section-title">Lab Tests & Services</p>
-          <table class="pdf-table">
-            <thead>
-              <tr>
-                <th>Test / Service</th>
-                <th>Qty</th>
-                <th>Unit Price</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Complete Blood Count (CBC)<small>Includes WBC, RBC, Platelets</small></td>
-                <td>3</td>
-                <td>₹350</td>
-                <td>₹1,050</td>
-              </tr>
-              <tr>
-                <td>Lipid Profile Panel<small>Total Cholesterol, LDL, HDL, Triglycerides</small></td>
-                <td>2</td>
-                <td>₹650</td>
-                <td>₹1,300</td>
-              </tr>
-              <tr>
-                <td>Thyroid Function Test (TSH, T3, T4)<small>Full thyroid panel</small></td>
-                <td>1</td>
-                <td>₹850</td>
-                <td>₹850</td>
-              </tr>
-              <tr>
-                <td>HbA1c (Glycated Haemoglobin)<small>Diabetes monitoring</small></td>
-                <td>2</td>
-                <td>₹450</td>
-                <td>₹900</td>
-              </tr>
-              <tr>
-                <td>Urine Routine & Microscopy<small>Physical, chemical, microscopic</small></td>
-                <td>3</td>
-                <td>₹200</td>
-                <td>₹600</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="pdf-totals">
-            <div class="pdf-total-row"><span>Subtotal</span><span>₹4,700</span></div>
-            <div class="pdf-total-row"><span>GST (18%)</span><span>₹846</span></div>
-            <div class="pdf-total-row"><span>Discount</span><span>- ₹200</span></div>
-            <div class="pdf-total-row grand"><span>Total Due</span><span>₹5,346</span></div>
-          </div>
-        </div>
-
-        <div class="pdf-footer">
-          <div>
-            <p>Payment via NEFT / UPI to MedLab Diagnostics</p>
-            <p style="margin-top:4px;">Account: 123456789 · IFSC: HDFC0001234</p>
-            <p style="margin-top:8px; color:#c0b8b0;">Thank you for your continued partnership.</p>
-          </div>
-          <div class="pdf-stamp" id="pdfStamp">AWAITING<br>APPROVAL</div>
-        </div>
+    <div class="pdf-frame-wrap" id="pdfFrameWrap">
+      <div class="pdf-placeholder">
+        <div class="pdf-placeholder-icon">📄</div>
+        <p>Loading invoice PDF...</p>
       </div>
     </div>
   </div>
 
-  <!-- Approval Sidebar -->
-  <div class="approval-panel">
-    <div class="approval-inner">
-      <h2 class="approval-heading">Review Invoice</h2>
-      <p class="approval-sub">Please review the lab invoice on the left and submit your decision below.</p>
+  <!-- RIGHT: APPROVAL PANEL -->
+  <div class="sidebar">
+    <div class="sidebar-inner">
+      <h2 class="sidebar-heading">Review Invoice</h2>
+      <p class="sidebar-sub">Please review the invoice carefully and submit your decision below.</p>
 
+      <!-- Invoice details -->
       <div class="info-card">
         <div class="info-row">
           <span class="info-label">Invoice No.</span>
-          <span class="info-value">#INV-2024-0892</span>
+          <span class="info-value" id="detInvNum"><span class="loading">Loading...</span></span>
         </div>
         <div class="info-row">
           <span class="info-label">From</span>
-          <span class="info-value">MedLab Diagnostics</span>
+          <span class="info-value" id="detFrom"><span class="loading">Loading...</span></span>
         </div>
         <div class="info-row">
-          <span class="info-label">Date</span>
-          <span class="info-value">15 May 2024</span>
+          <span class="info-label">Received</span>
+          <span class="info-value" id="detDate"><span class="loading">Loading...</span></span>
         </div>
         <div class="info-row">
-          <span class="info-label">Due</span>
-          <span class="info-value">30 May 2024</span>
+          <span class="info-label">Amount</span>
+          <span class="info-value amount" id="detAmount"><span class="loading" style="font-size:13px">Loading...</span></span>
         </div>
         <div class="info-row">
-          <span class="info-label">Total Amount</span>
-          <span class="info-value amount">₹5,346</span>
+          <span class="info-label">Current Status</span>
+          <span class="info-value" id="detStatus"><span class="loading">Loading...</span></span>
         </div>
       </div>
+
+      <!-- Decision form -->
+      <div id="decisionForm">
+        <div class="divider"></div>
+        <label class="field-label">Your Comments (optional)</label>
+        <textarea id="comments" placeholder="Add any notes, queries, or reason for rejection..."></textarea>
+
+        <div class="action-btns" id="actionBtns">
+          <button class="btn btn-reject" id="rejectBtn" onclick="submitDecision('Rejected')">
+            <span>✕</span> Reject
+          </button>
+          <button class="btn btn-approve" id="approveBtn" onclick="submitDecision('Approved')">
+            <span>✓</span> Approve
+            <div class="spinner" id="spinner"></div>
+          </button>
+        </div>
+        <div class="confirmation" id="confirmation"></div>
+      </div>
+
+      <!-- Already decided -->
+      <div id="alreadyDecided" style="display:none;"></div>
 
       <div class="divider"></div>
 
-      <label class="field-label">COMMENTS (optional)</label>
-      <textarea id="comments" placeholder="Add any notes or reasons for your decision..."></textarea>
-
-      <div class="action-btns" id="actionBtns">
-        <button class="btn btn-reject" onclick="submitDecision('rejected')">✕ Reject</button>
-        <button class="btn btn-approve" onclick="submitDecision('approved')">✓ Approve</button>
-      </div>
-
-      <div class="confirmation" id="confirmation"></div>
-
-      <div class="divider"></div>
-
-      <div class="timeline">
-        <p class="pdf-section-title">Activity</p>
-        <div class="timeline-item">
-          <div class="timeline-dot done"></div>
-          <div class="timeline-text"><strong>Invoice sent</strong>15 May 2024 · 10:32 AM</div>
+      <!-- Timeline -->
+      <div class="timeline-section">
+        <p class="section-label">Activity Log</p>
+        <div class="tl-item">
+          <div class="tl-dot done"></div>
+          <div class="tl-text"><strong>Invoice received</strong><span id="tlReceived">—</span></div>
         </div>
-        <div class="timeline-item">
-          <div class="timeline-dot done"></div>
-          <div class="timeline-text"><strong>Viewed by client</strong>15 May 2024 · 11:05 AM</div>
+        <div class="tl-item">
+          <div class="tl-dot done"></div>
+          <div class="tl-text"><strong>Approval link sent to you</strong><span id="tlSent">via email</span></div>
         </div>
-        <div class="timeline-item" id="decisionItem">
-          <div class="timeline-dot" id="decisionDot"></div>
-          <div class="timeline-text" id="decisionText"><strong>Decision pending</strong>Waiting for approval</div>
+        <div class="tl-item">
+          <div class="tl-dot" id="tlDecisionDot"></div>
+          <div class="tl-text"><strong id="tlDecisionTitle">Awaiting your decision</strong><span id="tlDecisionTime">Pending</span></div>
         </div>
       </div>
+
     </div>
   </div>
-
 </div>
 
 <script>
-  function submitDecision(decision) {
-    const comments = document.getElementById('comments').value;
-    const btns = document.getElementById('actionBtns');
-    const conf = document.getElementById('confirmation');
-    const badge = document.getElementById('topBadge');
-    const stamp = document.getElementById('pdfStamp');
-    const dot = document.getElementById('decisionDot');
-    const dtxt = document.getElementById('decisionText');
-    const now = new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+// ─── CONFIG — update WEBAPP_URL after deploying as Web App ───
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbymAkCgDoz7NtFlgrAt0eg7rY_7su6a7jAx3A-80wv4dd9UGwI6_Q2oHaYCajdysAYVuw/exec';
+// ─────────────────────────────────────────────────────────────
 
-    btns.querySelectorAll('button').forEach(b => b.disabled = true);
+// Read URL params
+const params     = new URLSearchParams(window.location.search);
+const TOKEN      = params.get('token');
+const SHEET_ID   = params.get('sheet');
 
-    if (decision === 'approved') {
-      conf.className = 'confirmation approved';
-      conf.innerHTML = '✓ <strong>Invoice Approved</strong><br>Your approval has been recorded. The lab will be notified.' + (comments ? '<br><em style="margin-top:6px;display:block;opacity:0.8">"' + comments + '"</em>' : '');
-      badge.className = 'status-badge status-approved';
-      badge.textContent = 'Approved';
-      stamp.className = 'pdf-stamp approved';
-      stamp.innerHTML = 'APPROVED';
-      dot.className = 'timeline-dot done';
-      dtxt.innerHTML = '<strong>Approved by client</strong>' + now;
-    } else {
-      conf.className = 'confirmation rejected';
-      conf.innerHTML = '✕ <strong>Invoice Rejected</strong><br>Your decision has been recorded. The lab will be notified.' + (comments ? '<br><em style="margin-top:6px;display:block;opacity:0.8">"' + comments + '"</em>' : '');
-      badge.className = 'status-badge status-rejected';
-      badge.textContent = 'Rejected';
-      stamp.className = 'pdf-stamp rejected';
-      stamp.innerHTML = 'REJECTED';
-      dot.className = 'timeline-dot done';
-      dtxt.innerHTML = '<strong>Rejected by client</strong>' + now;
-    }
-    conf.style.display = 'block';
+// Google Sheets public JSON API (sheet must be published to web)
+// Column order from Code.gs: Token,MessageId,PdfUrl,SenderEmail,SenderName,Subject,Filename,InvoiceNumber,Amount,ClientEmail,Date,Status,Comment,DecisionDate
+const COL = {
+  TOKEN:0, MSG_ID:1, PDF_URL:2, SENDER_EMAIL:3, SENDER_NAME:4,
+  SUBJECT:5, FILENAME:6, INV_NUM:7, AMOUNT:8, CLIENT_EMAIL:9,
+  DATE:10, STATUS:11, COMMENT:12, DECISION_DATE:13
+};
+
+let invoiceData = null;
+
+// ── INIT ──────────────────────────────────────────────────────
+window.addEventListener('load', async () => {
+  if (!TOKEN || !SHEET_ID) {
+    showError('No invoice token found in this link. Please use the link sent to your email.');
+    return;
   }
-</script>
+  try {
+    await loadInvoiceData();
+    populateUI();
+    hideLoader();
+  } catch(err) {
+    showError('Unable to load invoice data. Please try again or contact the sender.<br><small style="opacity:0.7">' + err.message + '</small>');
+  }
+});
 
+// ── FETCH DATA FROM GOOGLE SHEET ──────────────────────────────
+async function loadInvoiceData() {
+  // Using Google Sheets JSON export (requires sheet to be published)
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Invoices`;
+  const res  = await fetch(url);
+  const text = await res.text();
+
+  // Strip Google's wrapper: /*O_o*/\ngoogle.visualization.Query.setResponse(...)
+  const json = JSON.parse(text.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, ''));
+  const rows = json.table.rows;
+
+  for (const row of rows) {
+    const cells = row.c.map(c => c ? (c.v !== null ? String(c.v) : '') : '');
+    if (cells[COL.TOKEN] === TOKEN) {
+      invoiceData = cells;
+      return;
+    }
+  }
+  throw new Error('Invoice not found for this token.');
+}
+
+// ── POPULATE UI ───────────────────────────────────────────────
+function populateUI() {
+  const d = invoiceData;
+
+  // Filename & PDF link
+  const filename = d[COL.FILENAME] || 'Invoice.pdf';
+  document.getElementById('pdfFilename').textContent = filename;
+
+  const pdfUrl = d[COL.PDF_URL];
+  document.getElementById('pdfDownloadBtn').href = pdfUrl.replace('/preview', '/view');
+
+  // Load PDF in iframe
+  if (pdfUrl) {
+    document.getElementById('pdfFrameWrap').innerHTML =
+      `<iframe src="${pdfUrl}" title="Invoice PDF" allowfullscreen></iframe>`;
+  }
+
+  // Info card
+  setText('detInvNum', d[COL.INV_NUM] || '—');
+  setText('detFrom',   d[COL.SENDER_NAME] || d[COL.SENDER_EMAIL] || '—');
+  setText('detDate',   formatDate(d[COL.DATE]));
+  setText('detAmount', d[COL.AMOUNT] || '—');
+
+  const status = d[COL.STATUS] || 'Pending';
+  setText('detStatus', status);
+
+  // Timeline
+  document.getElementById('tlReceived').textContent = formatDate(d[COL.DATE]);
+
+  // Handle already-decided invoices
+  if (status === 'Approved' || status === 'Rejected') {
+    showAlreadyDecided(status, d[COL.COMMENT], d[COL.DECISION_DATE]);
+  }
+
+  // Top badge
+  updateBadge(status);
+
+  // Show main layout
+  document.getElementById('mainLayout').style.display = 'grid';
+}
+
+// ── SUBMIT DECISION ───────────────────────────────────────────
+async function submitDecision(decision) {
+  const comment = document.getElementById('comments').value.trim();
+  const approveBtn = document.getElementById('approveBtn');
+  const rejectBtn  = document.getElementById('rejectBtn');
+  const spinner    = document.getElementById('spinner');
+
+  approveBtn.disabled = true;
+  rejectBtn.disabled  = true;
+  spinner.style.display = 'inline-block';
+
+  try {
+    const payload = { token: TOKEN, status: decision, comment };
+
+    // POST to Apps Script Web App
+    await fetch(WEBAPP_URL, {
+      method: 'POST',
+      mode: 'no-cors', // required for Apps Script
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    // Show confirmation (no-cors means we can't read response, assume success)
+    showConfirmation(decision, comment);
+    updateBadge(decision);
+    updateTimeline(decision);
+
+  } catch(err) {
+    approveBtn.disabled = false;
+    rejectBtn.disabled  = false;
+    spinner.style.display = 'none';
+    alert('Something went wrong. Please try again or contact the sender.');
+  }
+}
+
+// ── UI HELPERS ────────────────────────────────────────────────
+function showConfirmation(decision, comment) {
+  const conf = document.getElementById('confirmation');
+  const icon = decision === 'Approved' ? '✅' : '❌';
+  conf.className = `confirmation ${decision.toLowerCase()}`;
+  conf.innerHTML = `
+    <div class="conf-title">${icon} Invoice ${decision}</div>
+    Your decision has been recorded. The lab will be notified shortly.
+    ${comment ? `<div style="margin-top:8px;opacity:0.8;font-style:italic">"${comment}"</div>` : ''}
+  `;
+  conf.style.display = 'block';
+  document.getElementById('actionBtns').style.display = 'none';
+  document.getElementById('spinner').style.display = 'none';
+}
+
+function showAlreadyDecided(status, comment, decisionDate) {
+  document.getElementById('decisionForm').style.display = 'none';
+  const box = document.getElementById('alreadyDecided');
+  const icon = status === 'Approved' ? '✅' : '❌';
+  box.className = `already-decided ${status.toLowerCase()}`;
+  box.innerHTML = `
+    <div class="conf-title">${icon} Already ${status}</div>
+    This invoice was ${status.toLowerCase()} on ${formatDate(decisionDate)}.
+    ${comment ? `<div style="margin-top:8px;opacity:0.8;font-style:italic">"${comment}"</div>` : ''}
+  `;
+  box.style.display = 'block';
+  updateTimeline(status, decisionDate);
+}
+
+function updateBadge(status) {
+  const badge = document.getElementById('topBadge');
+  badge.textContent = status === 'Pending' ? 'Pending Review' : status;
+  badge.className = 'status-pill ' +
+    (status === 'Approved' ? 'pill-approved' : status === 'Rejected' ? 'pill-rejected' : 'pill-pending');
+}
+
+function updateTimeline(status, date) {
+  const dot   = document.getElementById('tlDecisionDot');
+  const title = document.getElementById('tlDecisionTitle');
+  const time  = document.getElementById('tlDecisionTime');
+  dot.className   = `tl-dot ${status.toLowerCase()}`;
+  title.textContent = status === 'Approved' ? 'Approved ✓' : 'Rejected ✕';
+  time.textContent  = date ? formatDate(date) : new Date().toLocaleString('en-IN');
+}
+
+function setText(id, val) {
+  document.getElementById(id).textContent = val;
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('en-IN', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  } catch { return iso; }
+}
+
+function hideLoader() {
+  setTimeout(() => {
+    document.getElementById('loader').classList.add('hidden');
+  }, 1600);
+}
+
+function showError(msg) {
+  document.getElementById('loader').classList.add('hidden');
+  document.getElementById('errorMsg').innerHTML = msg;
+  document.getElementById('errorState').classList.add('show');
+}
+</script>
 </body>
 </html>
