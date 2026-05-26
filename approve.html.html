@@ -374,12 +374,12 @@ function populateUI() {
   document.getElementById('pdfFilename').textContent = filename;
 
   const pdfUrl = d[COL.PDF_URL];
-  document.getElementById('pdfDownloadBtn').href = pdfUrl.replace('/preview', '/view');
+  const pdfViewUrl = pdfUrl.replace('/preview', '/view');
+  document.getElementById('pdfDownloadBtn').href = pdfViewUrl;
 
-  // Load PDF in iframe
+  // Load PDF — try Google Drive embed first, with fallback UI
   if (pdfUrl) {
-    document.getElementById('pdfFrameWrap').innerHTML =
-      `<iframe src="${pdfUrl}" title="Invoice PDF" allowfullscreen></iframe>`;
+    loadPdfWithFallback(pdfUrl, pdfViewUrl);
   }
 
   // Info card
@@ -501,6 +501,82 @@ function hideLoader() {
   setTimeout(() => {
     document.getElementById('loader').classList.add('hidden');
   }, 1600);
+}
+
+// ── PDF LOADER WITH FALLBACK ─────────────────────────────────
+function loadPdfWithFallback(embedUrl, viewUrl) {
+  const wrap = document.getElementById('pdfFrameWrap');
+
+  // Method 1: Google Drive embed iframe
+  wrap.innerHTML = `
+    <div style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:0;">
+      <iframe
+        id="pdfIframe"
+        src="${embedUrl}"
+        title="Invoice PDF"
+        style="width:100%;height:780px;border:none;box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:2px;background:white;"
+        allowfullscreen
+        onload="checkIframeLoaded(this, '${viewUrl}')"
+        onerror="showPdfFallback('${viewUrl}')"
+      ></iframe>
+      <div id="pdfFallback" style="display:none;"></div>
+    </div>`;
+
+  // Safety timeout — if iframe doesn't load in 5s, show fallback
+  setTimeout(() => {
+    const fb = document.getElementById('pdfFallback');
+    if (fb && fb.style.display === 'none') {
+      showPdfFallback(viewUrl);
+    }
+  }, 6000);
+}
+
+function checkIframeLoaded(iframe, viewUrl) {
+  // Google Drive sometimes loads but shows an error page inside iframe
+  // We can't read iframe content due to CORS, so just verify it rendered
+  try {
+    const h = iframe.contentWindow.document.body.innerHTML;
+    if (h && h.includes('errorMessage')) showPdfFallback(viewUrl);
+  } catch(e) {
+    // Cross-origin — iframe loaded fine from Google's domain, that's expected
+  }
+}
+
+function showPdfFallback(viewUrl) {
+  const iframe = document.getElementById('pdfIframe');
+  const fb     = document.getElementById('pdfFallback');
+  if (!fb || fb.style.display !== 'none') return;
+
+  if (iframe) iframe.style.display = 'none';
+  fb.style.display = 'block';
+  fb.innerHTML = `
+    <div style="
+      width:100%;max-width:680px;height:520px;background:white;
+      box-shadow:0 12px 60px rgba(0,0,0,0.2);border-radius:2px;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:20px;padding:40px;text-align:center;
+    ">
+      <div style="font-size:56px;">📄</div>
+      <div>
+        <div style="font-family:'Playfair Display',serif;font-size:20px;color:#0f0e0c;margin-bottom:8px;">
+          Invoice PDF Ready
+        </div>
+        <p style="font-size:13px;color:#6b6560;line-height:1.7;max-width:340px;">
+          Your browser is blocking the embedded preview. 
+          Click the button below to open and review the PDF, 
+          then come back here to submit your decision.
+        </p>
+      </div>
+      <a href="${viewUrl}" target="_blank" style="
+        background:#0f0e0c;color:#e0b84a;padding:14px 32px;border-radius:8px;
+        text-decoration:none;font-size:14px;font-weight:700;letter-spacing:0.04em;
+        display:inline-flex;align-items:center;gap:8px;
+        box-shadow:0 4px 20px rgba(0,0,0,0.2);
+      ">
+        📂 Open Invoice PDF
+      </a>
+      <p style="font-size:11px;color:#a8a29b;">Opens in a new tab · Then return here to approve or reject</p>
+    </div>`;
 }
 
 function showError(msg) {
